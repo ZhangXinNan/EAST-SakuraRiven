@@ -1,0 +1,15 @@
+
+
+.DS_Store
+ICDAR_2015/
+pths/
+pths_zx/
+
+_tmp/
+.idea/
+__pycache__/
+
+
+*.so
+*.bak
+
