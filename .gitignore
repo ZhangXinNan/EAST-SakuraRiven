@@ -13,3 +13,6 @@ __pycache__/
 *.so
 *.bak
 
+*.pyd
+submit_*.zip
+submit_*/

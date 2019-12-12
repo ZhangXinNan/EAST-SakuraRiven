@@ -3,9 +3,10 @@ from torchvision import transforms
 from PIL import Image, ImageDraw
 from model import EAST
 import os
+import argparse
 from dataset import get_rotate_mat
 import numpy as np
-# import lanms
+import lanms
 
 
 def resize_img(img):
@@ -112,7 +113,7 @@ def get_boxes(score, geo, score_thresh=0.9, nms_thresh=0.2):
 	boxes[:, :8] = polys_restored
 	boxes[:, 8] = score[xy_text[index, 0], xy_text[index, 1]]
 	# 临时注销掉 zhangxin
-	# boxes = lanms.merge_quadrangle_n9(boxes.astype('float32'), nms_thresh)
+	boxes = lanms.merge_quadrangle_n9(boxes.astype('float32'), nms_thresh)
 	return boxes
 
 
@@ -147,7 +148,10 @@ def detect(img, model, device):
 		print("score shape ", score.shape)
 		print("geo   shape ", geo.shape)
 	boxes = get_boxes(score.squeeze(0).cpu().numpy(), geo.squeeze(0).cpu().numpy())
-	print("boxes shape ", boxes.shape)
+	if boxes is not None:
+		print("boxes shape ", boxes.shape)
+	else:
+		print("boxes shape    None")
 	return adjust_ratio(boxes, ratio_w, ratio_h)
 
 
@@ -175,6 +179,9 @@ def detect_dataset(model, device, test_img_path, submit_path):
 	img_files = sorted([os.path.join(test_img_path, img_file) for img_file in img_files])
 	
 	for i, img_file in enumerate(img_files):
+		print(img_file)
+		if os.path.basename(img_file)[0] == '.':
+			continue
 		print('evaluating {} image'.format(i), end='\r')
 		boxes = detect(Image.open(img_file), model, device)
 		seq = []
@@ -184,20 +191,27 @@ def detect_dataset(model, device, test_img_path, submit_path):
 			f.writelines(seq)
 
 
-if __name__ == '__main__':
-	# img_path    = '../ICDAR_2015/test_img/img_2.jpg'
-	img_path = './ICDAR_2015/test_img/img_3.jpg'
-	model_path  = './pths/east_vgg16.pth'
-	# res_img     = './res.bmp'
-	res_img = '_tmp/' + os.path.basename(img_path)
+def get_args():
+	parser = argparse.ArgumentParser()
+	parser.add_argument('--img_path', default='./ICDAR_2015/test_img/img_5.jpg')
+	parser.add_argument('--res_img', default='_tmp/img_5.jpg')
+	parser.add_argument('--model_path', default='./pths/east_vgg16.pth')
+	return parser.parse_args()
+
+
+def main(args):
 	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 	model = EAST().to(device)
-	model.load_state_dict(torch.load(model_path))
+	model.load_state_dict(torch.load(args.model_path))
 	model.eval()
-	img = Image.open(img_path)
-	
+	img = Image.open(args.img_path)
+
 	boxes = detect(img, model, device)
-	plot_img = plot_boxes(img, boxes)	
-	plot_img.save(res_img)
+	plot_img = plot_boxes(img, boxes)
+	plot_img.save(args.res_img)
+
+
+if __name__ == '__main__':
+	main(get_args())
 
 
