@@ -7,6 +7,7 @@ import argparse
 from dataset import get_rotate_mat
 import numpy as np
 import lanms
+import cv2
 
 
 def resize_img(img):
@@ -143,10 +144,15 @@ def detect(img, model, device):
 		detected polys
 	'''
 	img, ratio_h, ratio_w = resize_img(img)
+	print('resize_img', img.size, ratio_h, ratio_w)
 	with torch.no_grad():
 		score, geo = model(load_pil(img).to(device))
 		print("score shape ", score.shape)
 		print("geo   shape ", geo.shape)
+		img_score = score.squeeze(0).cpu().numpy()
+		img_score = img_score * 255 / (img_score.max() - img_score.min())
+		img_score = img_score.astype(np.uint8)
+		cv2.imwrite("score.png", img_score[0])
 	boxes = get_boxes(score.squeeze(0).cpu().numpy(), geo.squeeze(0).cpu().numpy())
 	if boxes is not None:
 		print("boxes shape ", boxes.shape)
@@ -165,6 +171,30 @@ def plot_boxes(img, boxes):
 	for box in boxes:
 		draw.polygon([box[0], box[1], box[2], box[3], box[4], box[5], box[6], box[7]], outline=(0,255,0))
 	return img
+
+
+def plot_boxes_cv(img, boxes):
+	if boxes is None:
+		return img
+	img_show = img.copy()
+	for i, box in enumerate(boxes):
+		box = box[:8].reshape((-1, 2)).astype(np.int32)
+		# print(box, box.shape)
+		cv2.fillConvexPoly(img_show, box, (0,255,0))
+	img_show = cv2.addWeighted(img, 0.5, img_show, 0.5, 0)
+	return img_show
+
+
+def plot_score_cv(img, score):
+	if boxes is None:
+		return img
+	img_show = img.copy()
+	for i, box in enumerate(boxes):
+		box = box[:8].reshape((-1, 2)).astype(np.int32)
+		# print(box, box.shape)
+		cv2.fillConvexPoly(img_show, box, (0,255,0))
+	img_show = cv2.addWeighted(img, 0.5, img_show, 0.5, 0)
+	return img_show
 
 
 def detect_dataset(model, device, test_img_path, submit_path):
@@ -205,10 +235,16 @@ def main(args):
 	model.load_state_dict(torch.load(args.model_path))
 	model.eval()
 	img = Image.open(args.img_path)
-
+	print(args.img_path, img.mode, img.size)
+	if img.mode != 'RGB':
+		img = img.convert('RGB')
+		print(args.img_path, img.mode, img.size)
 	boxes = detect(img, model, device)
-	plot_img = plot_boxes(img, boxes)
-	plot_img.save(args.res_img)
+	# plot_img = plot_boxes(img, boxes)
+	# plot_img.save(args.res_img)
+	img_cv = cv2.imread(args.img_path, cv2.IMREAD_COLOR)
+	img_show = plot_boxes_cv(img_cv, boxes)
+	cv2.imwrite(args.res_img, img_show)
 
 
 if __name__ == '__main__':

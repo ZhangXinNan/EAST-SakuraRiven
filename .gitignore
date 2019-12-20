@@ -4,6 +4,8 @@
 ICDAR_2015/
 pths/
 pths_zx/
+*.pth
+
 
 _tmp/
 .idea/
