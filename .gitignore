@@ -8,6 +8,7 @@ pths_zx/
 
 
 _tmp/
+_tmp*/
 .idea/
 __pycache__/
 

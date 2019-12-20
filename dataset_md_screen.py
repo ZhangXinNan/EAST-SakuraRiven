@@ -1,4 +1,3 @@
-#encoding=utf-8
 from shapely.geometry import Polygon
 import numpy as np
 import cv2
@@ -179,7 +178,8 @@ def is_cross_text(start_loc, length, vertices):
 	for vertice in vertices:
 		p2 = Polygon(vertice.reshape((4,2))).convex_hull
 		inter = p1.intersection(p2).area
-		if 0.01 <= inter / p2.area <= 0.99: 
+		# if 0.01 <= inter / p2.area <= 0.99:
+		if p2.area > 0 and 0.01 <= inter / p2.area <= 0.99:
 			return True
 	return False
 		
@@ -270,6 +270,7 @@ def adjust_height(img, vertices, ratio=0.2):
 	img = img.resize((img.width, new_h), Image.BILINEAR)
 	
 	new_vertices = vertices.copy()
+	# print(new_vertices, type(new_vertices))
 	if vertices.size > 0:
 		new_vertices[:,[1,3,5,7]] = vertices[:,[1,3,5,7]] * (new_h / old_h)
 	return img, new_vertices
@@ -320,7 +321,8 @@ def get_score_geo(img, vertices, labels, scale, length):
 			ignored_polys.append(np.around(scale * vertice.reshape((4,2))).astype(np.int32))
 			continue		
 		
-		poly = np.around(scale * shrink_poly(vertice).reshape((4,2))).astype(np.int32) # scaled & shrinked
+		# poly = np.around(scale * shrink_poly(vertice).reshape((4,2))).astype(np.int32) # scaled & shrinked
+		poly = np.around(scale * vertice.reshape((4, 2))).astype(np.int32)  # scaled
 		polys.append(poly)
 		temp_mask = np.zeros(score_map.shape[:-1], np.float32)
 		cv2.fillPoly(temp_mask, [poly], 1)
@@ -361,32 +363,35 @@ def extract_vertices(lines):
 	'''
 	labels = []
 	vertices = []
-	for line in lines:
-		vertices.append(list(map(int,line.rstrip('\n').lstrip('\ufeff').split(',')[:8])))
+	for i, line in enumerate(lines):
+		# vertices.append(list(map(int,line.rstrip('\n').lstrip('\ufeff').split(',')[:8])))
+		arr = line.strip().split(',')
+		if len(arr) < 8:
+			# print(i, line, arr)
+			continue
+		pts = [round(float(x)) for x in arr[:8]]
+		vertices.append(pts)
+		# print(line, pts)
 		label = 0 if '###' in line else 1
 		labels.append(label)
 	return np.array(vertices), np.array(labels)
 
 	
-class custom_dataset(data.Dataset):
+class custom_dataset_md_screen(data.Dataset):
 	def __init__(self, img_path, gt_path, scale=0.25, length=512):
-		super(custom_dataset, self).__init__()
+		super(custom_dataset_md_screen, self).__init__()
 		self.img_files = [os.path.join(img_path, img_file) for img_file in sorted(os.listdir(img_path))]
 		self.gt_files  = [os.path.join(gt_path, gt_file) for gt_file in sorted(os.listdir(gt_path))]
 		self.scale = scale
 		self.length = length
-		# for i in range(len(self.img_files)):
-		# 	print(i, self.img_files[i], self.gt_files[i])
 
 	def __len__(self):
 		return len(self.img_files)
 
 	def __getitem__(self, index):
-		# print(index, self.gt_files[index], self.img_files[index])
-		# UnicodeDecodeError: 'gbk' codec can't decode byte 0xbf in position 2: illegal multibyte sequence
-		# with open(self.gt_files[index], 'r') as f:
-		with open(self.gt_files[index], 'r', encoding='UTF-8') as f:
+		with open(self.gt_files[index], 'r', encoding='utf-8') as f:
 			lines = f.readlines()
+		# print(self.gt_files[index])
 		vertices, labels = extract_vertices(lines)
 		
 		img = Image.open(self.img_files[index])
@@ -400,93 +405,3 @@ class custom_dataset(data.Dataset):
 		score_map, geo_map, ignored_map = get_score_geo(img, vertices, labels, self.scale, self.length)
 		return transform(img), score_map, geo_map, ignored_map
 
-
-def get_score_geo_quad(img, vertices, labels, scale, length):
-	'''generate score gt and geometry gt
-	Input:
-		img     : PIL Image
-		vertices: vertices of text regions <numpy.ndarray, (n,8)>
-		labels  : 1->valid, 0->ignore, <numpy.ndarray, (n,)>
-		scale   : feature map / image
-		length  : image length
-	Output:
-		score gt, geo gt, ignored
-	'''
-	score_map = np.zeros((int(img.height * scale), int(img.width * scale), 1), np.float32)
-	geo_map = np.zeros((int(img.height * scale), int(img.width * scale), 5), np.float32)
-	ignored_map = np.zeros((int(img.height * scale), int(img.width * scale), 1), np.float32)
-
-	index = np.arange(0, length, int(1 / scale))
-	index_x, index_y = np.meshgrid(index, index)
-	ignored_polys = []
-	polys = []
-
-	for i, vertice in enumerate(vertices):
-		if labels[i] == 0:
-			ignored_polys.append(np.around(scale * vertice.reshape((4, 2))).astype(np.int32))
-			continue
-
-		poly = np.around(scale * shrink_poly(vertice).reshape((4, 2))).astype(np.int32)  # scaled & shrinked
-		polys.append(poly)
-		temp_mask = np.zeros(score_map.shape[:-1], np.float32)
-		cv2.fillPoly(temp_mask, [poly], 1)
-
-		theta = find_min_rect_angle(vertice)
-		rotate_mat = get_rotate_mat(theta)
-
-		rotated_vertices = rotate_vertices(vertice, theta)
-		x_min, x_max, y_min, y_max = get_boundary(rotated_vertices)
-		rotated_x, rotated_y = rotate_all_pixels(rotate_mat, vertice[0], vertice[1], length)
-
-		d1 = rotated_y - y_min
-		d1[d1 < 0] = 0
-		d2 = y_max - rotated_y
-		d2[d2 < 0] = 0
-		d3 = rotated_x - x_min
-		d3[d3 < 0] = 0
-		d4 = x_max - rotated_x
-		d4[d4 < 0] = 0
-		geo_map[:, :, 0] += d1[index_y, index_x] * temp_mask
-		geo_map[:, :, 1] += d2[index_y, index_x] * temp_mask
-		geo_map[:, :, 2] += d3[index_y, index_x] * temp_mask
-		geo_map[:, :, 3] += d4[index_y, index_x] * temp_mask
-		geo_map[:, :, 4] += theta * temp_mask
-
-	cv2.fillPoly(ignored_map, ignored_polys, 1)
-	cv2.fillPoly(score_map, polys, 1)
-	return torch.Tensor(score_map).permute(2, 0, 1), torch.Tensor(geo_map).permute(2, 0, 1), torch.Tensor(
-		ignored_map).permute(2, 0, 1)
-
-
-class custom_dataset_quad(data.Dataset):
-	def __init__(self, img_path, gt_path, scale=0.25, length=512):
-		super(custom_dataset_quad, self).__init__()
-		self.img_files = [os.path.join(img_path, img_file) for img_file in sorted(os.listdir(img_path))]
-		self.gt_files = [os.path.join(gt_path, gt_file) for gt_file in sorted(os.listdir(gt_path))]
-		self.scale = scale
-		self.length = length
-
-	# for i in range(len(self.img_files)):
-	# 	print(i, self.img_files[i], self.gt_files[i])
-
-	def __len__(self):
-		return len(self.img_files)
-
-	def __getitem__(self, index):
-		# print(index, self.gt_files[index], self.img_files[index])
-		# UnicodeDecodeError: 'gbk' codec can't decode byte 0xbf in position 2: illegal multibyte sequence
-		# with open(self.gt_files[index], 'r') as f:
-		with open(self.gt_files[index], 'r', encoding='UTF-8') as f:
-			lines = f.readlines()
-		vertices, labels = extract_vertices(lines)
-
-		img = Image.open(self.img_files[index])
-		img, vertices = adjust_height(img, vertices)
-		img, vertices = rotate_img(img, vertices)
-		img, vertices = crop_img(img, vertices, labels, self.length)
-		transform = transforms.Compose([transforms.ColorJitter(0.5, 0.5, 0.5, 0.25), \
-										transforms.ToTensor(), \
-										transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))])
-
-		score_map, geo_map, ignored_map = get_score_geo_quad(img, vertices, labels, self.scale, self.length)
-		return transform(img), score_map, geo_map, ignored_map

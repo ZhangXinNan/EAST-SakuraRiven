@@ -1,7 +1,8 @@
 import torch
 from torchvision import transforms
 from PIL import Image, ImageDraw
-from model import EAST
+# from model import EAST
+from model_md_screen import EAST
 import os
 import argparse
 from dataset import get_rotate_mat
@@ -134,7 +135,7 @@ def adjust_ratio(boxes, ratio_w, ratio_h):
 	return np.around(boxes)
 	
 	
-def detect(img, model, device):
+def detect(img, model, device, score_img_path=None):
 	'''detect text regions of img using model
 	Input:
 		img   : PIL Image
@@ -148,17 +149,32 @@ def detect(img, model, device):
 	with torch.no_grad():
 		score, geo = model(load_pil(img).to(device))
 		print("score shape ", score.shape)
-		print("geo   shape ", geo.shape)
+		# print("geo   shape ", geo.shape)
 		img_score = score.squeeze(0).cpu().numpy()
 		img_score = img_score * 255 / (img_score.max() - img_score.min())
 		img_score = img_score.astype(np.uint8)
-		cv2.imwrite("score.png", img_score[0])
-	boxes = get_boxes(score.squeeze(0).cpu().numpy(), geo.squeeze(0).cpu().numpy())
-	if boxes is not None:
-		print("boxes shape ", boxes.shape)
-	else:
-		print("boxes shape    None")
-	return adjust_ratio(boxes, ratio_w, ratio_h)
+		if score_img_path is not None:
+			# cv2.imwrite(score_img_path, img_score[0])
+			img_mask = img_score[0]
+			# img_mask = cv2.cvtColor(img_score[0], cv2.COLOR_GRAY2BGR)
+			img_show = np.array(img).copy()
+			img_show = cv2.resize(img_show, (img_mask.shape[1], img_mask.shape[0]))
+			r, g, b = cv2.split(img_show)
+			print(img_show.shape, img_show.dtype)
+			print(img_mask.shape, img_mask.dtype)
+			# img_show = cv2.bitwise_and(img_show, img_mask)
+			g = cv2.bitwise_and(g, img_mask)
+			r = cv2.bitwise_and(r, img_mask)
+			b = cv2.bitwise_and(b, img_mask)
+			img_show = cv2.merge((r,g,b))
+			cv2.imwrite(score_img_path, img_show)
+	# boxes = get_boxes(score.squeeze(0).cpu().numpy(), geo.squeeze(0).cpu().numpy())
+	# if boxes is not None:
+	# 	print("boxes shape ", boxes.shape)
+	# else:
+	# 	print("boxes shape    None")
+	# return adjust_ratio(boxes, ratio_w, ratio_h)
+	return None
 
 
 def plot_boxes(img, boxes):
@@ -223,17 +239,24 @@ def detect_dataset(model, device, test_img_path, submit_path):
 
 def get_args():
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--img_path', default='./ICDAR_2015/test_img/img_5.jpg')
-	parser.add_argument('--res_img', default='_tmp/img_5.jpg')
-	parser.add_argument('--model_path', default='./pths/east_vgg16.pth')
+	# parser.add_argument('--img_path', default='D:\\data_md\\liuchenxing\\20191120_screen\\test_img\\1a68dc49-6371-410e-98ad-d1bf58a58562.1572226612081.jpg')
+	parser.add_argument('--img_path', default='D:\\data_md\\liuchenxing\\20191120_screen\\test_img\\2cd357bf-e0d5-414f-8691-4c98d34124f2.Flcvy0OGvwsTxQQ_ytXw-ffWtZka.jpg')
+	parser.add_argument('--res_img', default='_tmp_md_screen\\')
+	parser.add_argument('--score_img', default='_tmp_md_screen\\')
+	parser.add_argument('--model_path', default='./pths_zx_md_screen/model_epoch_10.pth')
 	return parser.parse_args()
 
 
 def main(args):
+	if os.path.isdir(args.res_img):
+		args.res_img = os.path.join(args.res_img, os.path.basename(args.img_path))
+	if os.path.isdir(args.score_img):
+		args.score_img = os.path.join(args.score_img, os.path.basename(args.img_path) + ".score.epoch10.png")
+
 	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 	# device = torch.device('cpu')
 	model = EAST().to(device)
-	print(model.)
+	# print(model.named_parameters())
 	model.load_state_dict(torch.load(args.model_path))
 	model.eval()
 	img = Image.open(args.img_path)
@@ -241,12 +264,12 @@ def main(args):
 	if img.mode != 'RGB':
 		img = img.convert('RGB')
 		print(args.img_path, img.mode, img.size)
-	boxes = detect(img, model, device)
+	boxes = detect(img, model, device, args.score_img)
 	# plot_img = plot_boxes(img, boxes)
 	# plot_img.save(args.res_img)
-	img_cv = cv2.imread(args.img_path, cv2.IMREAD_COLOR)
-	img_show = plot_boxes_cv(img_cv, boxes)
-	cv2.imwrite(args.res_img, img_show)
+	# img_cv = cv2.imread(args.img_path, cv2.IMREAD_COLOR)
+	# img_show = plot_boxes_cv(img_cv, boxes)
+	# cv2.imwrite(args.res_img, img_show)
 
 
 if __name__ == '__main__':
