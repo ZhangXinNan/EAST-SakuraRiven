@@ -133,16 +133,17 @@ class merge(nn.Module):
 		y = self.relu7(self.bn7(self.conv7(y)))
 		return y
 
-class output(nn.Module):
+
+class output_md_screen(nn.Module):
 	def __init__(self, scope=512):
-		super(output, self).__init__()
+		super(output_md_screen, self).__init__()
 		self.conv1 = nn.Conv2d(32, 1, 1)
 		self.sigmoid1 = nn.Sigmoid()
 		self.conv2 = nn.Conv2d(32, 4, 1)
 		self.sigmoid2 = nn.Sigmoid()
 		self.conv3 = nn.Conv2d(32, 1, 1)
 		self.sigmoid3 = nn.Sigmoid()
-		self.scope = 512
+		self.scope = scope
 		for m in self.modules():
 			if isinstance(m, nn.Conv2d):
 				nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -151,18 +152,19 @@ class output(nn.Module):
 
 	def forward(self, x):
 		score = self.sigmoid1(self.conv1(x))
-		loc   = self.sigmoid2(self.conv2(x)) * self.scope
-		angle = (self.sigmoid3(self.conv3(x)) - 0.5) * math.pi
-		geo   = torch.cat((loc, angle), 1) 
+		# loc   = self.sigmoid2(self.conv2(x)) * self.scope
+		# angle = (self.sigmoid3(self.conv3(x)) - 0.5) * math.pi
+		# geo   = torch.cat((loc, angle), 1)
 		# return score, geo
 		return score, 0
-	
-class EAST(nn.Module):
-	def __init__(self, pretrained=True):
-		super(EAST, self).__init__()
+
+
+class EAST_md_screen(nn.Module):
+	def __init__(self, pretrained=True, length=512):
+		super(EAST_md_screen, self).__init__()
 		self.extractor = extractor(pretrained)
 		self.merge     = merge()
-		self.output    = output()
+		self.output    = output_md_screen(scope=length)
 	
 	def forward(self, x):
 		return self.output(self.merge(self.extractor(x)))
