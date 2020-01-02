@@ -4,7 +4,7 @@ import subprocess
 import os
 import argparse
 from model import EAST
-from detect_zx import detect_dataset
+from detect_md import detect_dataset
 import numpy as np
 import shutil
 

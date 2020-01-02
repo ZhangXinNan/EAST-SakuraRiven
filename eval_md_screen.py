@@ -78,8 +78,8 @@ def get_args():
     parser.add_argument('--img_dir',
                         default='D:\\data_md\\liuchenxing\\20191120_screen\\test_img')
     parser.add_argument('--gt_dir', default='D:\\data_md\\liuchenxing\\20191120_screen\\test_gt')
-    parser.add_argument('--score_dir', default='D:\\data_md\\liuchenxing\\20191120_screen\\test_show')
-    parser.add_argument('--model_path', default='./pths_zx_md_screen512/model_epoch_100.pth')
+    parser.add_argument('--score_dir', default='D:\\data_md\\liuchenxing\\20191120_screen\\test_show50')
+    parser.add_argument('--model_path', default='./pths_zx_md_screen512/model_epoch_50.pth')
     parser.add_argument('--length', default=512, type=int)
     return parser.parse_args()
 

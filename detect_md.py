@@ -1,7 +1,7 @@
 import torch
 from torchvision import transforms
 from PIL import Image, ImageDraw
-from model import EAST
+from model_md import EAST_md as EAST
 import os
 import argparse
 from dataset import get_rotate_mat
@@ -149,10 +149,10 @@ def detect(img, model, device):
 		score, geo = model(load_pil(img).to(device))
 		print("score shape ", score.shape)
 		print("geo   shape ", geo.shape)
-		img_score = score.squeeze(0).cpu().numpy()
-		img_score = img_score * 255 / (img_score.max() - img_score.min())
-		img_score = img_score.astype(np.uint8)
-		cv2.imwrite("score.png", img_score[0])
+		# img_score = score.squeeze(0).cpu().numpy()
+		# img_score = img_score * 255 / (img_score.max() - img_score.min())
+		# img_score = img_score.astype(np.uint8)
+		# cv2.imwrite("score.png", img_score[0])
 	boxes = get_boxes(score.squeeze(0).cpu().numpy(), geo.squeeze(0).cpu().numpy())
 	if boxes is not None:
 		print("boxes shape ", boxes.shape)
@@ -232,21 +232,26 @@ def get_args():
 def main(args):
 	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 	# device = torch.device('cpu')
-	model = EAST().to(device)
-	print(model.)
-	model.load_state_dict(torch.load(args.model_path))
+	model = EAST(length=256).to(device)
+	# print(model.)
+	# model.load_state_dict(torch.load(args.model_path))
 	model.eval()
 	img = Image.open(args.img_path)
+	print(args.img_path, img.mode, img.size)
+	if img.width > img.height:
+		img = img.crop((0, 0, img.height, img.height))
+	elif img.width < img.height:
+		img = img.crop((0, 0, img.width, img.width))
 	print(args.img_path, img.mode, img.size)
 	if img.mode != 'RGB':
 		img = img.convert('RGB')
 		print(args.img_path, img.mode, img.size)
 	boxes = detect(img, model, device)
-	# plot_img = plot_boxes(img, boxes)
-	# plot_img.save(args.res_img)
-	img_cv = cv2.imread(args.img_path, cv2.IMREAD_COLOR)
-	img_show = plot_boxes_cv(img_cv, boxes)
-	cv2.imwrite(args.res_img, img_show)
+	plot_img = plot_boxes(img, boxes)
+	plot_img.save(args.res_img)
+	# img_cv = cv2.imread(args.img_path, cv2.IMREAD_COLOR)
+	# img_show = plot_boxes_cv(img_cv, boxes)
+	# cv2.imwrite(args.res_img, img_show)
 
 
 if __name__ == '__main__':
