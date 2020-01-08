@@ -1,7 +1,8 @@
 import torch
 from torchvision import transforms
 from PIL import Image, ImageDraw
-from model_md import EAST_md as EAST
+# from model_md import EAST_md as EAST
+from model import EAST
 import os
 import argparse
 from dataset import get_rotate_mat
@@ -134,7 +135,7 @@ def adjust_ratio(boxes, ratio_w, ratio_h):
 	return np.around(boxes)
 	
 	
-def detect(img, model, device):
+def detect(img, model, device, nms_thresh=0.2):
 	'''detect text regions of img using model
 	Input:
 		img   : PIL Image
@@ -153,7 +154,7 @@ def detect(img, model, device):
 		# img_score = img_score * 255 / (img_score.max() - img_score.min())
 		# img_score = img_score.astype(np.uint8)
 		# cv2.imwrite("score.png", img_score[0])
-	boxes = get_boxes(score.squeeze(0).cpu().numpy(), geo.squeeze(0).cpu().numpy())
+	boxes = get_boxes(score.squeeze(0).cpu().numpy(), geo.squeeze(0).cpu().numpy(), nms_thresh=nms_thresh)
 	if boxes is not None:
 		print("boxes shape ", boxes.shape)
 	else:
@@ -232,21 +233,22 @@ def get_args():
 def main(args):
 	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 	# device = torch.device('cpu')
-	model = EAST(length=256).to(device)
+	# model = EAST(length=256).to(device)
+	model = EAST().to(device)
 	# print(model.)
-	# model.load_state_dict(torch.load(args.model_path))
+	model.load_state_dict(torch.load(args.model_path))
 	model.eval()
 	img = Image.open(args.img_path)
 	print(args.img_path, img.mode, img.size)
-	if img.width > img.height:
-		img = img.crop((0, 0, img.height, img.height))
-	elif img.width < img.height:
-		img = img.crop((0, 0, img.width, img.width))
+	# if img.width > img.height:
+	# 	img = img.crop((0, 0, img.height, img.height))
+	# elif img.width < img.height:
+	# 	img = img.crop((0, 0, img.width, img.width))
 	print(args.img_path, img.mode, img.size)
 	if img.mode != 'RGB':
 		img = img.convert('RGB')
 		print(args.img_path, img.mode, img.size)
-	boxes = detect(img, model, device)
+	boxes = detect(img, model, device, 0.01)
 	plot_img = plot_boxes(img, boxes)
 	plot_img.save(args.res_img)
 	# img_cv = cv2.imread(args.img_path, cv2.IMREAD_COLOR)
